@@ -1,0 +1,93 @@
+---
+title: "Bioactivity"
+author: "Omri Nahor"
+date: "2025-10-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(vegan)
+library(ggplot2)
+library(ARTool)
+library(DRomics)
+library(pheatmap)
+library(RColorBrewer)
+library(gridExtra)
+library(ComplexHeatmap)
+library(InteractiveComplexHeatmap)
+
+# Prepare data (ds_sel from matabolomics or use metadata_sample.csv)
+data <- ds_sel
+row.names(data) <- data$Code
+data <- data %>%
+  mutate(across(everything(), ~ str_remove_all(., "`"))) %>%
+  filter(typefraction != "Crude")
+
+data_no_stdva <- data %>% select(-contains("Stdva"))
+
+# Pivot for long format
+long_data_growth <- data_no_stdva %>%
+  pivot_longer(
+    cols = c("P.a.5","St.5","E.coli.5","P.a.20","St.20","E.coli.20"),
+    names_to = c("Bacteria","TimePoint"),
+    names_pattern = "(.+)\\.(5|20)",
+    values_to = "Growth"
+  ) %>%
+  mutate(
+    Bacteriacode = paste(Code,Bacteria,TimePoint,sep="_"),
+    Growth = as.numeric(Growth)
+  )
+
+row.names(long_data_growth) <- long_data_growth$Bacteriacode
+
+long_data_growth <- long_data_growth %>%
+  mutate(Growthindex = case_when(
+    Growth < 33 ~ "High",
+    Growth >= 33 & Growth <= 70 ~ "Moderate",
+    Growth > 70 ~ "Low")) %>%
+  filter(!is.na(Growthindex))
+# Select numeric data and transform
+data_numeric <- long_data_growth[-c(1:18)]
+valid_columns <- sapply(colnames(data_numeric), function(name) {
+  parts <- unlist(strsplit(name,"_"))
+  if (length(parts) > 1) {
+    rt <- as.numeric(parts[2])
+    return(rt >= 3)
+  }
+  return(FALSE)
+})
+data_numeric <- data_numeric[,valid_columns]
+
+data_numeric1 <- data_numeric
+data_numeric1$Growthindex <- long_data_growth$Growthindex
+data_numeric <- data_numeric %>% mutate(across(everything(),as.numeric))
+data_numeric_log <- log2(data_numeric)
+data_numeric_log[data_numeric_log < 0] <- 0
+data_numeric_log <- as.data.frame(t(data_numeric_log))
+row.names(long_data_growth) <- long_data_growth$Bacteriacode
+
+# Run PERMANOVA
+PFL <- permanovaFL(
+  formula = data_numeric_log ~ Growthindex+TimePoint+Bacteria+
+    Growthindex*TimePoint+Growthindex*Bacteria+TimePoint*Bacteria+
+    Growthindex*TimePoint*Bacteria,
+  data = long_data_growth,
+  dist.method = "bray",
+  n.perm.max = 5000,
+  verbose = TRUE
+)
+
+# Format results
+PFL_res1 <- cbind(PFL$F.statistics,PFL$R.squared,PFL$p.permanova)
+colnames(PFL_res1) <- c("F.statistic","R.squared","P.value")
+row.names(PFL_res1) <- c(
+  "Growthindex","TimePoint","Bacteria",
+  "Growthindex:TimePoint","Growthindex:Bacteria",
+  "TimePoint:Bacteria","Growthindex:TimePoint:Bacteria")
+PFL_res1
+```

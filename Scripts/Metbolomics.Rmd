@@ -1,0 +1,581 @@
+---
+title: "Metabolomics"
+author: "Omri Nahor"
+date: "2025-10-01"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+# -----------------------------#
+# Metabolomics Preprocessing
+# -----------------------------#
+
+# Install and load necessary packages
+install.packages("ggfortify")
+install.packages("DRomics")
+install.packages("InteractiveComplexHeatmap")
+install.packages(c("ComplexHeatmap", "InteractiveComplexHeatmap"))
+install.packages("devtools")
+install.packages("pairwiseAdonis")
+install.packages("patchwork")
+install.packages("remotes")
+BiocManager::install(c("limma", "DESeq2", "SummarizedExperiment", "ctc"))
+
+# GitHub installations
+devtools::install_github("jokergoo/ComplexHeatmap")
+devtools::install_github("jokergoo/InteractiveComplexHeatmap")
+remotes::install_github("Ewels/PipeChart")
+remotes::install_github("pmartinezarbizu/pairwiseAdonis/pairwiseAdonis")
+```
+
+```{r libraries}
+library(data.table)
+library(dplyr)
+library(tidyverse)
+library(stringr)
+library(ggplot2)
+library(vegan)
+library(WGCNA)
+library(ComplexHeatmap)
+library(InteractiveComplexHeatmap)
+library(patchwork)
+library(reshape2)
+library(RColorBrewer)
+library(factoextra)
+library(FactoMineR)
+library(ARTool)
+library(cowplot)
+library(pairwiseAdonis)
+```
+
+```{r load-data}
+setwd("/home/user/R/metabolomics_project")
+path <- getwd()
+list.files(path)
+
+peak_table <- fread("peak_table.csv") %>% as.data.frame()
+canopus_table <- fread("canopus_summary.csv") %>% as.data.frame()
+```
+
+```{r clean-duplicates}
+duplicates <- canopus_table %>%
+  group_by(mappingFeatureId) %>%
+  filter(n() > 1)
+
+best_duplicates <- duplicates %>%
+  slice_max(`NPC#pathway`, n = 1, with_ties = FALSE)
+
+canopus_clean <- canopus_table %>%
+  filter(!(mappingFeatureId %in% duplicates$mappingFeatureId))
+
+canopus_final <- bind_rows(canopus_clean, best_duplicates)
+```
+
+```{r join-and-filter}
+merged_data <- left_join(peak_table, canopus_final, by = c("row ID" = "mappingFeatureId"))
+merged_data <- merged_data[!is.na(merged_data$`NPC#pathway`), ]
+```
+
+```{r build-meta}
+mz_rt <- paste(merged_data$`row m/z`, merged_data$`row retention time`, sep = "_")
+
+meta_data <- merged_data[, 1:13]
+meta_data$Class <- merged_data$`NPC#pathway`
+meta_data$mappingid <- merged_data$`row ID`
+meta_data$molecularFormula <- merged_data$molecularFormula
+meta_data$mz_rt <- mz_rt
+```
+
+```{r build-feature-matrix}
+feature_matrix <- merged_data[, !(names(merged_data) %in% c(names(meta_data), "formulaRank":tail(names(merged_data), 1)))]
+feature_matrix <- as.data.frame(t(feature_matrix))
+colnames(feature_matrix) <- mz_rt
+rownames(feature_matrix) <- str_remove(rownames(feature_matrix), "\\.d Peak (area|height)")
+```
+
+```{r rename-samples}
+create_new_names <- function(names) {
+  sapply(names, function(name) {
+    first_part <- substr(name, 1, 4)
+    last_part <- sub(".*_(\\d{4})$", "\\1", name)
+    paste0(first_part, last_part)
+  })
+}
+
+feature_matrix$Sampleorder <- create_new_names(rownames(feature_matrix))
+feature_matrix$Sampleorder <- gsub(" ", "", feature_matrix$Sampleorder)
+feature_matrix$code <- gsub(" ", "", str_sub(rownames(feature_matrix), 1, 4))
+```
+
+```{r metadata-align}
+sample_names <- data.frame(Code = feature_matrix$code,
+                           Sample = rownames(feature_matrix),
+                           Sampleorder = feature_matrix$Sampleorder,
+                           Order = as.numeric(str_extract(rownames(feature_matrix), "\\d{4}$")))
+
+metadata_raw <- read.csv("metadata_sample.csv")
+colnames(metadata_raw)[which(names(metadata_raw) == "Sample")] <- "Code"
+metadata_aligned <- left_join(sample_names, metadata_raw, by = "Code")
+```
+
+```{r remove-bad-samples}
+to_remove <- c("Blank 15 neg 5 mcL_Y-F9_1_3374", 
+               "Blank 14 neg 5 mcL_Y-F9_1_3369",
+               "F147 SHDSD251021 1 mg-ml ACN_R-G7_1_3370",
+               "F148 SHDSM251021 1 mg-ml ACN_R-G8_1_3371",
+               "F149 SHDSU251021 1 mg-ml ACN_R-G9_1_3372")
+
+jania_samples <- metadata_aligned %>%
+  filter(Proxlineage == "Jania") %>%
+  pull(Sampleorder)
+
+rosh_samples <- metadata_aligned %>%
+  filter(Site == "Rosh Hanikra") %>%
+  pull(Sampleorder)
+
+manual_removals <- feature_matrix$Sampleorder[rownames(feature_matrix) %in% to_remove]
+
+all_remove <- unique(c(jania_samples, rosh_samples, manual_removals))
+
+feature_matrix_clean <- feature_matrix[!feature_matrix$Sampleorder %in% all_remove, ]
+metadata_clean <- metadata_aligned[!metadata_aligned$Sampleorder %in% all_remove, ]
+
+wash_idx <- which(str_detect(metadata_clean$Code, "Wash"))
+metadata_clean <- metadata_clean[-wash_idx, ]
+```
+
+```{r order-cleaned-data}
+order_idx <- order(metadata_clean$Order)
+metadata_clean_ordered <- metadata_clean[order_idx, ]
+metadata_clean_ordered$Order <- as.numeric(metadata_clean_ordered$Order)
+
+metadata_clean_ordered <- metadata_clean_ordered %>%
+  mutate(Tempgroup = case_when(
+    waterTemp >= 17 & waterTemp < 21 ~ "cold",
+    waterTemp >= 21 & waterTemp < 26 ~ "mild",
+    waterTemp >= 26 & waterTemp <= 30 ~ "warm",
+    TRUE ~ NA_character_
+  ))
+```
+
+```{r site-splitting}
+metadata_shikmona <- metadata_clean_ordered %>% filter(Order <= 3352)
+metadata_batgalim <- metadata_clean_ordered %>% filter(Order > 3352)
+
+samples_shikmona <- metadata_shikmona$Sample
+samples_batgalim <- metadata_batgalim$Sample
+
+ds_numeric <- feature_matrix_clean %>% select(-c(Sampleorder, code))
+
+ds_shikmona <- ds_numeric[rownames(ds_numeric) %in% samples_shikmona, ]
+ds_batgalim <- ds_numeric[rownames(ds_numeric) %in% samples_batgalim, ]
+```
+
+```{r final-filtering}
+batgalim_blanks <- c("Blan3353", "Blan3361")
+metadata_clean_ordered <- metadata_clean_ordered[!metadata_clean_ordered$Code %in% batgalim_blanks, ]
+
+ds_numeric <- ds_numeric[!rownames(ds_numeric) %in% c("Blank 12 neg 5 mcL_Y-F9_1_3353", 
+                                                      "Blank 13 neg 5 mcL_Y-F9_1_3361"), ]
+```
+
+
+## Batch Effect Analysis
+
+```{r batch-effect-tic}
+order <- as.numeric(do.call(rbind, str_split(rownames(ds_numeric), "_"))[,4])
+tic <- log2(rowSums(ds_numeric, na.rm = TRUE))
+df_be <- as.data.frame(cbind(Type = metadata_aligned_cleaned_order$typefraction, Order = order, TIC = tic))
+
+library(ggplot2)
+
+ggplot(data = df_be, aes(x = as.numeric(Order), y = as.numeric(TIC))) +
+  geom_point(fill = "#20B2AA", size = 2.5, shape = 21, color = "black") +
+  labs(x = "Run Order", y = "log2(TIC)") + 
+  facet_wrap(~ Type) +
+  theme_bw()
+```
+
+```{r batch-effect-trend}
+ggplot(data = df_be, aes(x = as.numeric(Order), y = as.numeric(TIC))) +
+  geom_point(fill = "#20B2AA", size = 2.5, shape = 21, color = "black") +
+  labs(x = "Run Order", y = "log2(TIC)") + 
+  facet_wrap(~ Type) +
+  geom_smooth(method = lm) +
+  theme_bw()
+```
+
+## PCA Colored by Injection Order
+
+```{r pca-by-order}
+library(FactoMineR)
+library(factoextra)
+
+mtrx1 <- ds_numeric
+pca.ds1 <- PCA(mtrx1, scale.unit = TRUE, graph = FALSE)
+pca <- fviz_pca_ind(pca.ds1)
+pca_data <- pca$data
+Order <- as.numeric(metadata_aligned_cleaned_order$Order)
+
+ggplot(pca_data, aes(x = x, y = y, color = Order)) +
+  geom_point(size = 2) +
+  facet_wrap(~ metadata_aligned_cleaned_order$typefraction) +
+  theme_minimal() +
+  labs(x = "PC1", y = "PC2") +
+  theme(legend.position = "bottom") +
+  scale_color_viridis_c()
+```
+
+## IS RSD Calculation & Visualization
+
+```{r is-rsd}
+is_index <- which(str_detect(colnames(ds_numeric), "418.19993"))
+df_box <- data.frame(Fraction = metadata_aligned_cleaned_order$typefraction, IS = as.numeric(ds_numeric[,is_index]))
+
+rsd_data <- df_box %>%
+  group_by(Fraction) %>%
+  summarise(RSD = sd(IS, na.rm = TRUE) / mean(IS, na.rm = TRUE) * 100)
+
+data_with_rsd <- left_join(df_box, rsd_data, by = "Fraction")
+
+library(ggsci)
+
+ggplot(data_with_rsd, aes(x = Fraction, y = IS)) +
+  geom_boxplot(outlier.shape = NA, fill = "gray67", alpha = 0.5) +
+  geom_jitter(aes(color = Fraction), width = 0.2, size = 2, alpha = 0.7) +
+  facet_wrap(~ Fraction, scales = "free_x") +
+  geom_text(
+    data = rsd_data,
+    aes(x = Fraction, y = 0, label = paste0("RSD: ", round(RSD, 2), "%")),
+    inherit.aes = FALSE,
+    hjust = 0.5, vjust = 0.5, size = 4, color = "blue") +
+  theme_minimal() +
+  labs(x = "Group", y = "IS Value") +
+  scale_color_aaas()
+```
+
+## PCA Before Filtering (Colored by Fraction)
+
+```{r pca-pre-filter}
+ds_sel <- cbind(metadata_aligned_cleaned_order, ds_numeric)
+ds_sel$typefraction[is.na(ds_sel$typefraction)] <- "Blank"
+row.names(ds_sel) <- ds_sel$Code
+
+mtrx1 <- ds_sel[-c(1:25)]
+pca.ds1 <- PCA(mtrx1, scale.unit = TRUE, graph = FALSE)
+pca <- fviz_pca_ind(pca.ds1)
+pca_data <- pca$data
+Sample <- ds_sel$typefraction
+Samplename <- ds_sel$Code
+
+ggplot(pca_data, aes(x = x, y = y, color = Sample)) +
+  geom_point(size = 3) +
+  geom_text(aes(label = Samplename), hjust = 1.5, vjust = 1.5, size = 3.5) +
+  theme_minimal() +
+  labs(x = "PC1", y = "PC2") +
+  theme(legend.position = "bottom") +
+  scale_color_lancet()
+```
+
+```{r pca-pre-filter-simple}
+ggplot(pca_data, aes(x = x, y = y, color = Sample)) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  labs(x = "PC1", y = "PC2") +
+  theme(legend.position = "bottom") +
+  scale_color_lancet()
+```
+
+```{r}
+### PCA with metadata -----------
+# after filtering
+
+mtrx1 <- ds_sel[-c(1:25)]  # numeric data
+metadata1 <- ds_sel[, 1:25]
+rownames(metadata1) <- trimws(rownames(metadata1))
+
+# Perform PCA on the imputed dataset
+pca.ds1 <- PCA(mtrx1, scale.unit = TRUE, graph = FALSE)
+str(pca.ds1)
+
+# Extract PCA coordinates
+pca_scores <- as.data.frame(pca.ds1$ind$coord)
+pca_scores$SampleID <- rownames(pca_scores)
+
+# Merge with metadata
+pca_with_metadata <- merge(pca_scores, metadata1, by = "row.names", all.x = TRUE)
+rownames(pca_with_metadata) <- pca_with_metadata$Row.names
+pca_with_metadata$Row.names <- NULL
+
+# Check that it's a data frame
+if (!is.data.frame(pca_with_metadata)) {
+  stop("The merged object `pca_with_metadata` is not a data frame.")
+}
+
+# PCA plots
+mid_value <- median(pca_with_metadata$waterTemp, na.rm = TRUE)
+
+# Gradient color + shape + labels
+ggplot(pca_with_metadata, aes(x = Dim.1, y = Dim.2, color = waterTemp, shape = Proxlineage)) + 
+  geom_point(size = 5) +
+  scale_color_gradient2(low = "darkblue", mid = "darkred", high = "red", midpoint = mid_value) +
+  scale_shape_manual(values = c(16, 17, 18, 19, 15, 8)) +
+  labs(x = "PCA Axis 1", y = "PCA Axis 2", title = "PCA Plot with Metadata") +
+  theme_minimal() +
+  theme(legend.position = "right") +
+  guides(color = guide_colorbar(title = "Temperature"),
+         shape = guide_legend(title = "Proxlineage")) +
+  geom_text(aes(label = Code), vjust = -1, size = 3)
+
+# Viridis scale
+ggplot(pca_with_metadata, aes(x = Dim.1, y = Dim.2, color = waterTemp, shape = Proxlineage)) + 
+  geom_point(size = 5) +
+  scale_color_viridis(option = "C", direction = 1, name = "Temperature") +
+  scale_shape_manual(values = c(16, 17, 18, 19, 15, 8)) +
+  labs(x = "PCA Axis 1", y = "PCA Axis 2", title = "PCA Plot with Metadata") +
+  theme_minimal() +
+  theme(legend.position = "right") +
+  guides(color = guide_colorbar(), shape = guide_legend(title = "Proxlineage")) + 
+  geom_text(aes(label = Code), vjust = -1, size = 3)
+
+# Without labels
+ggplot(pca_with_metadata, aes(x = Dim.1, y = Dim.2, color = waterTemp, shape = Proxlineage)) + 
+  geom_point(size = 5) +
+  scale_color_viridis(option = "C", direction = 1, name = "Temperature") +
+  scale_shape_manual(values = c(16, 17, 18, 19, 15, 8)) +
+  labs(x = "PCA Axis 1", y = "PCA Axis 2", title = "PCA Plot with Metadata") +
+  theme_minimal() +
+  theme(legend.position = "right") +
+  guides(color = guide_colorbar(), shape = guide_legend(title = "Proxlineage"))
+
+# By year
+pca_with_metadata$Year <- as.character(pca_with_metadata$Year)
+
+ggplot(pca_with_metadata, aes(x = Dim.1, y = Dim.2, color = waterTemp, shape = Year)) + 
+  geom_point(size = 5) +
+  scale_color_viridis(option = "C", direction = 1, name = "Temperature") +
+  scale_shape_manual(values = c(16, 17, 18, 19, 15, 8)) +
+  labs(x = "PCA Axis 1", y = "PCA Axis 2", title = "PCA Plot with Metadata") +
+  theme_minimal() +
+  theme(legend.position = "right") +
+  guides(color = guide_colorbar(), shape = guide_legend(title = "Proxlineage"))
+
+# Plot only by temperature and Proxlineage
+mid_value <- median(pca_with_metadata$waterTemp, na.rm = TRUE)
+
+ggplot(pca_with_metadata, aes(x = Dim.1, y = Dim.2, color = waterTemp, shape = Proxlineage)) + 
+  geom_point(size = 5) +
+  scale_color_gradient2(low = "darkblue", mid = "darkred", high = "red", midpoint = mid_value) +
+  scale_shape_manual(values = c(16, 17, 18, 19, 15, 8)) +
+  labs(x = "PCA Axis 1", y = "PCA Axis 2", title = "PCA Plot with Metadata") +
+  theme_minimal() +
+  theme(legend.position = "right") +
+  guides(color = guide_colorbar(title = "Temperature"), shape = guide_legend(title = "Proxlineage"))
+
+# With typefraction and labels
+
+ggplot(pca_with_metadata, aes(x = Dim.1, y = Dim.2, color = typefraction)) + 
+  geom_point(size = 5) + 
+  theme_minimal() +
+  geom_text(aes(label = Code), vjust = -1, size = 3)
+
+# Saveable ggplot object
+
+gg5 <- ggplot(pca_with_metadata, aes(x = Dim.1, y = Dim.2, color = typefraction)) + 
+  geom_point(size = 4) + 
+  theme_minimal()
+
+gg5
+
+ggsave("PCA_metwithclass.svg", gg5, width = 8, height = 6, dpi = 300, device = "svg")
+
+# Faceted by site
+
+ggplot(pca_with_metadata, aes(x = Dim.1, y = Dim.2)) +
+  geom_point(aes(fill = waterTemp, shape = Site), size = 6) +
+  scale_shape_manual(values = c(21, 24)) +
+  scale_fill_viridis(option = "D") +
+  facet_wrap(~ Site) +
+  theme_minimal()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(vegan)
+library(pheatmap)
+library(dplyr)
+library(LDM)
+library(pairwiseAdonis)
+```
+
+```{r Load and Clean Data}
+data <- ds_sel
+row.names(data) <- data$Code
+data <- data %>% mutate(across(everything(), ~ str_remove_all(., "`")))
+
+# Select numeric data and filter RT < 3
+data_numeric <- data[-c(1:25)]
+col_names <- colnames(data_numeric)
+valid_columns <- sapply(col_names, function(name) {
+  parts <- unlist(strsplit(name, "_"))
+  if (length(parts) > 1) {
+    rt <- as.numeric(parts[2])
+    return(rt >= 3)
+  }
+  return(FALSE)
+})
+data_numeric <- data_numeric[, valid_columns]
+data_numeric1 <- data_numeric
+
+# Add metadata and log-transform
+data_numeric1$typefraction <- metadata_aligned_cleaned_order$typefraction
+data_numeric <- data_numeric %>% mutate(across(everything(), ~ as.numeric(.)))
+data_numeric_log <- log2(data_numeric)
+data_numeric_log[data_numeric_log < 0] <- 0
+row.names(metadata_aligned_cleaned_order) <- metadata_aligned_cleaned_order$Code
+data_numeric_log <- as.data.frame(t(data_numeric_log))
+```
+
+```{r PERMANOVA and LDM}
+PFL <- permanovaFL(formula = data_numeric_log ~ typefraction + Month + waterTemp + Proxlineage + waterTemp * Month,
+                   data = metadata_aligned_cleaned_order,
+                   dist.method = "bray",
+                   n.perm.max = 5000, verbose = TRUE)
+
+PFL_res1 <- cbind(PFL$F.statistics, PFL$R.squared, PFL$p.permanova)
+colnames(PFL_res1) <- c("F.statistic", "R.squared", "P.value")
+row.names(PFL_res1) <- c("typefraction", "Month", "waterTemp", "Proxlineage", "waterTemp:Month")
+
+print(PFL_res1)
+
+# Basic PERMANOVA and pairwise
+PFLadonis <- adonis2(t(data_numeric_log) ~ typefraction, distance = "bray", data = metadata_aligned_cleaned_order)
+PFLadonisfraction <- pairwise.adonis2(t(data_numeric_log) ~ typefraction, distance = "bray", data = metadata_aligned_cleaned_order)
+
+print(PFLadonis)
+print(PFLadonisfraction)
+```
+
+```{r Clustering Tree and Dendrogram}
+library(ctc)
+library(dendextend)
+
+treefrac <- hclust(vegdist(t(data_numeric_log), method = 'bray'))
+plot(treefrac)
+
+treefracnewqick <- hc2Newick(treefrac, flat = FALSE)
+write(treefracnewqick, file = 'treefracnewqickbatg.newick')
+
+write.csv(data_numeric_log, 'data_numeric_log.csv', row.names = TRUE)
+write.csv(metadata_aligned_cleaned_order, 'metadata_aligned_cleaned_order.csv')
+
+dend <- as.dendrogram(treefrac)
+fractions <- as.factor(metadata_aligned_cleaned_order$typefraction)
+sites <- as.factor(metadata_aligned_cleaned_order$Site)
+
+labels_colors(dend) <- rainbow(length(unique(fractions)))[as.numeric(fractions)]
+plot(dend, main = "Hierarchical Clustering Dendrogram", xlab = "Samples", ylab = "Bray-Curtis Distance",
+     ylim = c(0, max(treefrac$height)), horiz = TRUE, leaflab = "none")
+text(x = par("usr")[1] - 0.1, y = seq_along(labels(dend)), labels = labels(dend),
+     col = labels_colors(dend), cex = 0.7, pos = 4)
+
+unique_sites <- unique(sites)
+site_shapes <- 1:length(unique_sites)
+names(site_shapes) <- unique_sites
+points(x = rep(par("usr")[1] - 0.15, length(sites)), y = seq_along(sites), 
+       pch = site_shapes[as.character(sites)], col = "black", cex = 1.5)
+legend(x = "topright", legend = unique_sites, pch = site_shapes, col = "black", title = "Site")
+```
+
+```{r Summary Table}
+PFL_res <- cbind(PFL$F.statistics, PFL$R.squared, PFL$p.permanova)
+colnames(PFL_res) <- c("F.statistic", "R.squared", "P.value")
+row.names(PFL_res) <- c("typefraction")
+print(PFL_res)
+```
+
+```{r Optional Check}
+print(filtered_data_numeric_HM)
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(pheatmap)
+library(vegan)
+library(LDM)
+library(pairwiseAdonis)
+library(ARTool)
+library(dendextend)
+library(ctc)
+library(readxl)
+library(scales)
+library(reshape2)
+```
+
+```{r alpha-diversity-metabolite}
+# Alpha Diversity for Metabolite
+alpha_data <- as.data.frame(ds_sel[, grep("_", names(ds_sel))])
+alpha_data <- t(alpha_data)
+counts1 <- alpha_data[rowSums(alpha_data) > 0, ]
+dim(counts1)
+
+metadataalpha <- metadata_aligned_cleaned_order
+row.names(metadataalpha) <- metadataalpha$Code
+metadataalpha$total <- colSums(counts1)
+
+counts1_int <- round(counts1)
+metadataalpha$date <- excel_numeric_to_date(as.numeric(as.character(metadataalpha$Samplingdate)), date_system = "modern")
+metadataalpha$date <- format(metadataalpha$date, "%Y-%m")
+
+counts_rare_6320000 <- as.data.frame(t(rrarefy(t(counts1_int), sample = 6328000)))
+metadataalpha$Shannon <- diversity(counts_rare_6320000, index = "shannon", MARGIN = 2)
+metadataalpha$Simpson <- diversity(counts_rare_6320000, index = "simpson", MARGIN = 2)
+metadataalpha$Sobs <- specnumber(counts_rare_6320000, MARGIN = 2)
+
+metadataalpha1 <- metadataalpha[, c(1, 5:13, 15, 17, 19, 21, 23, 25:30)]
+alpha_for_graph <- reshape2::melt(metadataalpha1, id.vars = list("Month", "Season", "Year", "Samplingdate", "Code",
+                                                               "Proxlineage", "waterTemp", "Site", "typefraction",
+                                                               "total", "date", "Tempgroup", "P.a.5", "St.5", "E.coli.5", "P.a.20", "E.coli.20", "St.20"))
+
+my_colors <- c("warm" = "lightcoral", "mild" = "lightgreen", "cold" = "lightblue")
+alpha_for_graph$typefraction <- factor(alpha_for_graph$typefraction, levels = c("Crude", "B`", "D`", "F`", "H`", "I`"))
+
+boxplot <- ggplot(alpha_for_graph, aes(x = as.factor(typefraction), y = value, fill = Tempgroup)) +
+  geom_boxplot() +
+  facet_wrap(. ~ variable, scales = "free") +
+  scale_fill_manual(values = my_colors)
+ggsave("Alpha_FractionAll.svg", boxplot, width = 8, height = 6, dpi = 300, device = "svg")
+
+boxplot_site <- ggplot(alpha_for_graph, aes(x = as.factor(typefraction), y = value, fill = Tempgroup)) +
+  geom_boxplot() +
+  facet_wrap(Site ~ variable, scales = "free") +
+  scale_fill_manual(values = my_colors)
+ggsave("Alpha_FractionBySite.svg", boxplot_site, width = 8, height = 6, dpi = 300, device = "svg")
+
+p5 <- ggplot(alpha_for_graph, aes(x = waterTemp, y = value)) +
+  geom_point(shape = 21, aes(fill = Site)) +
+  geom_smooth(method = "lm") +
+  facet_wrap(. ~ variable, scales = "free") +
+  theme(panel.background = element_rect(fill = NA, colour = "grey20"),
+        axis.title = element_blank(),
+        panel.grid.major = element_line(colour = "grey80"),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(size = 12, colour = "black"),
+        axis.text.y = element_text(size = 12, colour = "black"),
+        axis.ticks = element_line(size = 1)) +
+  guides(fill = guide_legend(override.aes = list(shape = 21)))
+ggsave("corolationAlphabothMet.svg", p5, width = 8, height = 6, dpi = 300, device = "svg")
+
+# Statistical Testing with ARTool
+shannon_test_tempgroup <- art(Shannon ~ as.factor(Tempgroup), data = metadataalpha)
+anova(shannon_test_tempgroup)
+
+shannon_test_temp <- art(Shannon ~ as.factor(waterTemp), data = metadataalpha)
+anova(shannon_test_temp)
+
+metadataalpha1$Month <- as.factor(metadataalpha1$Month)
+metadataalpha1$Samplingdate <- as.numeric(metadataalpha1$Samplingdate)
+```
+

@@ -1,0 +1,408 @@
+---
+title: "Microbiome analyzing"
+author: "Omri Nahor"
+date: "2025-10-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Microbiome Data Preprocessing and Filtering
+
+```{r}
+# Load required libraries
+library(vegan)
+library(ggpubr)
+library(tibble)
+library(janitor)
+library(tidyr)
+library(tidyverse)
+
+# Load data
+counts <- read.csv("ASV_table.csv", header = TRUE, row.names = 1)
+metadata <- read.csv("Metadatabac.csv", header = TRUE, row.names = 1, stringsAsFactors = TRUE)
+tax <- read.csv("Taxonomy.csv", header = TRUE, row.names = 1, stringsAsFactors = TRUE)
+
+# Fix sample names
+modify_name <- function(name) {
+  if (grepl("^X", name)) {
+    sub("^X", "S", name)
+  } else {
+    paste0("S", name)
+  }
+}
+colnames(counts) <- sapply(colnames(counts), modify_name)
+colnames(counts) <- gsub("\\.", "_", colnames(counts))
+
+# Generate full taxonomy labels
+taxonomy_data <- tax %>%
+  mutate(
+    Kingdom = Kingdom,
+    Phylum = paste("p_", Phylum),
+    Class = paste(Phylum, "c_", Class, sep = "_"),
+    Order = paste(Class, "o_", Order, sep = "_"),
+    Family = paste(Order, "f_", Family, sep = "_"),
+    Genus = paste(Family, "g_", Genus, sep = "_")
+  )
+
+# Format date columns
+metadata$Sampling_date <- excel_numeric_to_date(as.numeric(as.character(metadata$Sampling_date)), date_system = "modern")
+metadata$Month_year <- excel_numeric_to_date(as.numeric(as.character(metadata$Month_year)), date_system = "modern")
+
+# Match metadata to counts
+ord <- match(colnames(counts), row.names(metadata))
+metadata <- metadata[ord, ]
+counts1 <- counts[rowSums(counts) > 0, ]
+
+# Align metadata and counts
+metadata <- metadata[rownames(metadata) %in% colnames(counts1), ]
+metadata$total <- colSums(counts1)[rownames(metadata)]
+
+# Filter taxonomy
+keep_tax <- row.names(counts1)
+tax1 <- tax[row.names(tax) %in% keep_tax, ]
+
+# Classify temperature groups
+metadata <- metadata %>%
+  mutate(Tempgroup = case_when(
+    Temp >= 17 & Temp < 21 ~ "cold",
+    Temp >= 21 & Temp < 26 ~ "mild",
+    Temp >= 26 & Temp <= 30 ~ "warm",
+    TRUE ~ NA_character_
+  ))
+
+# Filter by Site and Type
+keep_Site <- c("Bat_Galim", "Shikmona")
+metadata2 <- metadata[metadata$Site %in% keep_Site & metadata$Type == "Whole" & metadata$total > 4000, ]
+metadata1 <- metadata[metadata$Site == "Shikmona" & metadata$Type == "Whole" & metadata$total > 4000, ]
+metadata3 <- metadata[metadata$Site == "Bat_Galim" & metadata$Type == "Whole" & metadata$total > 4000, ]
+
+# Filter counts
+keep_samples <- row.names(metadata2)
+keep_samples1 <- row.names(metadata1)
+keep_samples3 <- row.names(metadata3)
+
+counts2 <- counts1[, colnames(counts1) %in% keep_samples]
+counts2 <- counts2[rowSums(counts2) > 0, ]
+
+countsshikmoina <- counts1[, colnames(counts1) %in% keep_samples1]
+countsshikmoina <- countsshikmoina[rowSums(countsshikmoina) > 0, ]
+
+countsBatgalim <- counts1[, colnames(counts1) %in% keep_samples3]
+countsBatgalim <- countsBatgalim[rowSums(countsBatgalim) > 0, ]
+
+# Match taxonomy
+keep_ASV <- row.names(counts2)
+keep_ASV1 <- row.names(countsshikmoina)
+keep_ASV3 <- row.names(countsBatgalim)
+
+tax2 <- tax1[row.names(tax1) %in% keep_ASV, ]
+tax1 <- tax1[row.names(tax1) %in% keep_ASV1, ]
+tax3 <- tax1[row.names(tax1) %in% keep_ASV3, ]
+
+# Reorder taxonomy rows to match count matrix order
+tax2 <- tax2[match(row.names(counts2), row.names(tax2)), ]
+tax1 <- tax1[match(row.names(countsshikmoina), row.names(tax1)), ]
+tax3 <- tax3[match(row.names(countsBatgalim), row.names(tax3)), ]
+
+# Remove 2020 samples
+metadata1_2020_out <- metadata1[metadata1$Sampling_year != "2020", ]
+metadata2_2020_out <- metadata2[metadata2$Sampling_year != "2020", ]
+metadata3_2020_out <- metadata3[metadata3$Sampling_year != "2020", ]
+```
+
+## Microbiome Data Preprocessing and Filtering
+
+## Alpha Diversity and Visualization
+
+```{r}
+library(vegan)
+library(ggplot2)
+library(ggpubr)
+library(reshape2)
+library(ARTool)
+library(scales)
+library(egg)
+
+# Rarefy and calculate alpha diversity
+counts2_rare_4500 <- as.data.frame(t(rrarefy(t(counts2), sample = 4500)))
+metadata2$Shannon <- diversity(counts2_rare_4500, index = "shannon")
+metadata2$Simpson <- diversity(counts2_rare_4500, index = "simpson")
+metadata2$Sobs <- specnumber(counts2_rare_4500)
+
+# Prepare for plotting
+alpha_for_graph2 <- melt(metadata2, id.vars = c("Month", "Temp", "Sampling_year", "Type",
+                                               "lineage", "depth", "Sample_name", "Site",
+                                               "Sampling_date", "total", "Tempgroup", "Month_year"))
+```
+
+```{r}
+# Temperature group colors
+my_colors <- c("warm" = "lightcoral", "mild" = "lightgreen", "cold" = "lightblue")
+
+# Combined boxplot by tempgroup
+boxplot <- ggplot(alpha_for_graph2, aes(x = Tempgroup, y = value, fill = Tempgroup)) +
+  geom_boxplot() +
+  facet_wrap(. ~ variable, scales = "free") +
+  scale_fill_manual(values = my_colors)
+
+ggsave("Alphabac_newASV.svg", boxplot, width = 8, height = 6, dpi = 300, device = "svg")
+```
+
+## Linear Models and Trend Visualizations
+
+```{r}
+temp_lm_shannon <- lm(Shannon ~ Temp, data = metadata2)
+temp_lm_simpson <- lm(Simpson ~ Temp, data = metadata2)
+temp_lm_Sobs <- lm(Sobs ~ Temp, data = metadata2)
+
+Tempgroup_lm_shannon <- lm(Shannon ~ Tempgroup, data = metadata2)
+Tempgroup_lm_simpson <- lm(Simpson ~ Tempgroup, data = metadata2)
+Tempgroup_lm_Sobs <- lm(Sobs ~ Tempgroup, data = metadata2)
+```
+
+## Time-series Boxplots for Shannon Diversity
+
+```{r}
+metadata2$Month_year <- as.Date(metadata2$Month_year)
+metadata2$Month_floor <- as.Date(format(metadata2$Month_year, "%Y-%m-01"))
+metadata2$Month_year_fmt <- factor(format(metadata2$Month_floor, "%b-%Y"), levels = unique(format(sort(metadata2$Month_floor), "%b-%Y")))
+
+P1 <- ggplot(metadata2, aes(x = Month_year_fmt, y = Shannon)) +
+  geom_boxplot() +
+  scale_x_discrete() +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid = element_line(color = "grey90")
+  )
+```
+
+## Temperature Trend
+
+```{r}
+temps <- aggregate(metadata2$Temp, by = list(metadata2$Month_year), FUN = mean)
+colnames(temps) <- c("Month_year", "Temp")
+temps$Month_floor <- as.Date(format(temps$Month_year, "%Y-%m-01"))
+temps$Month_year_fmt <- factor(format(temps$Month_floor, "%b-%Y"), levels = levels(metadata2$Month_year_fmt))
+temps$Month_index <- as.numeric(match(temps$Month_year_fmt, levels(temps$Month_year_fmt)))
+
+P2 <- ggplot(temps, aes(x = Month_index, y = Temp)) +
+  geom_smooth(method = 'loess', span = 0.3, se = FALSE, color = "darkblue", linewidth = 1.2) +
+  scale_x_continuous(breaks = temps$Month_index, labels = temps$Month_year_fmt) +
+  theme_minimal()
+```
+
+## Arrange Plots
+
+```{r}
+ggarrange(P1, P2)
+```
+
+## Beta Diversity (NMDS)
+
+```{r}
+library(metagenomeSeq)
+library(vegan)
+
+phenotypeData <- AnnotatedDataFrame(metadata2)
+tax2_anotated <- AnnotatedDataFrame(tax2)
+obj <- newMRexperiment(counts2, phenoData = phenotypeData, featureData = tax2_anotated)
+objn <- cumNorm(obj, p = 0.5)
+counts_CSS_norm2 <- MRcounts(objn, norm = TRUE)
+
+NMDS2 <- metaMDS(t(counts_CSS_norm2), k = 2, try = 100, trymax = 100, distance = "bray", autotransform = FALSE)
+metadata2_NMDS <- cbind(metadata2, NMDS2$points)
+```
+
+```{r}
+library(viridis)
+p <- ggplot(metadata2_NMDS, aes(x = MDS1, y = MDS2)) +
+  geom_point(aes(fill = Temp, shape = lineage), size = 3) +
+  scale_shape_manual(values = c(21, 24)) +
+  scale_fill_viridis(option = "D") +
+  theme_minimal()
+
+ggsave("NMDSBothbacNEWASV.svg", p, width = 8, height = 6, dpi = 300, device = "svg")
+```
+
+## PERMANOVA
+
+```{r}
+metadata2_2020_out <- metadata2[metadata2$Sampling_year != "2020", ]
+keep_2020_out2 <- row.names(metadata2_2020_out)
+counts_CSS_norm2_2020_out <- counts_CSS_norm2[, colnames(counts_CSS_norm2) %in% keep_2020_out2]
+counts_CSS_norm2_2020_out <- counts_CSS_norm2_2020_out[rowSums(counts_CSS_norm2_2020_out) > 0, ]
+
+adonis_res <- adonis2(t(counts_CSS_norm2_2020_out) ~ Tempgroup * lineage * Site, data = metadata2_2020_out, distance = "bray", by = "term")
+print(adonis_res)
+```
+
+######### LDM Analysis #########
+
+otu_q_omni3_values <- LDM_ASVtempgroup[["p.otu.omni3"]]
+otu_q_omni_values <- LDM_ASVtempgroup[["p.otu.omni"]]
+
+otu_q_pa_values <- LDM_ASVtempgroup[["q.otu.pa"]]
+head(otu_q_freq_values)
+head(otu_q_omni_values)
+
+print(otu_q_omni_values)
+
+significant_otu_q_omni_values <- otu_q_omni_values[otu_q_omni_values < 0.05]
+significant_otu_q_omni3_values <- otu_q_omni3_values[otu_q_omni3_values < 0.05]
+significant_otu_q_freq_values <- otu_q_freq_values[otu_q_freq_values < 0.05]
+
+length(significant_otu_q_freq_values)
+length(significant_otu_q_omni_values)
+length(significant_otu_q_omni3_values)
+
+print(significant_otu_q_freq_values)
+print(significant_otu_q_omni_values)
+```
+
+```{r}
+# LDM for families
+family_table2f <- family_table2[rowSums(family_table2 > 0) > 7, ]
+
+LDM_ASVf2 <- ldm(
+  family_table2f | (Sampling_year) ~ Temp + lineage + Site + Temp * Site + lineage * Site + Temp * lineage + Temp * lineage * Site,
+  data = metadata2_2020_out,
+  test.omni3 = TRUE,
+  seed = 12365
+)
+
+otu_q_freq_valuesf2 <- LDM_ASVf2[["q.otu.freq"]]
+tables_listf2 <- lapply(rownames(otu_q_freq_valuesf2), function(row_name) {
+  data.frame(t(otu_q_freq_valuesf2[row_name, , drop = FALSE]))
+})
+names(tables_listf2) <- rownames(otu_q_freq_valuesf2)
+
+covTemp_otu_q_freq_valuesf2 <- tables_listf2[["cov1"]]
+covlineage_otu_q_freq_valuesf2 <- tables_listf2[["cov2"]]
+covSite_otu_q_freq_valuesf2 <- tables_listf2[["cov3"]]
+covTemp_Site_otu_q_freq_valuesf2 <- tables_listf2[["cov4"]]
+covlineage_Site_otu_q_freq_valuesf2 <- tables_listf2[["cov5"]]
+covTemp_lineage_otu_q_freq_valuesf2 <- tables_listf2[["cov6"]]
+covTemp_lineage_Site_otu_q_freq_valuesf2 <- tables_listf2[["cov7"]]
+
+# Filter significant q-values
+significant_covTemp_otu_q_freq_valuesf2 <- covTemp_otu_q_freq_valuesf2[covTemp_otu_q_freq_valuesf2 < 0.05, , drop = FALSE]
+significant_covlineage_otu_q_freq_valuesf2 <- covlineage_otu_q_freq_valuesf2[covlineage_otu_q_freq_valuesf2 < 0.05, , drop = FALSE]
+significant_covSite_otu_q_freq_valuesf2 <- covSite_otu_q_freq_valuesf2[covSite_otu_q_freq_valuesf2 < 0.05, , drop = FALSE]
+significant_covTemp_Site_otu_q_freq_valuesf2 <- covTemp_Site_otu_q_freq_valuesf2[covTemp_Site_otu_q_freq_valuesf2 < 0.05, , drop = FALSE]
+significant_covlineage_Site_otu_q_freq_valuesf2 <- covlineage_Site_otu_q_freq_valuesf2[covlineage_Site_otu_q_freq_valuesf2 < 0.05, , drop = FALSE]
+significant_covTemp_lineage_otu_q_freq_valuesf2 <- covTemp_lineage_otu_q_freq_valuesf2[covTemp_lineage_otu_q_freq_valuesf2 < 0.05, , drop = FALSE]
+significant_covTemp_lineage_Site_otu_q_freq_valuesf2 <- covTemp_lineage_Site_otu_q_freq_valuesf2[covTemp_lineage_Site_otu_q_freq_valuesf2 < 0.05, , drop = FALSE]
+
+print(significant_covTemp_otu_q_freq_valuesf2)
+print(significant_covlineage_otu_q_freq_valuesf2)
+print(significant_covSite_otu_q_freq_valuesf2)
+print(significant_covTemp_Site_otu_q_freq_valuesf2)
+print(significant_covlineage_Site_otu_q_freq_valuesf2)
+print(significant_covTemp_lineage_otu_q_freq_valuesf2)
+print(significant_covTemp_lineage_Site_otu_q_freq_valuesf2)
+```
+
+```{r}
+
+# Load necessary packages
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(lubridate)
+library(readr)
+library(janitor)
+library(ggpubr)
+
+# Ensure metadata2 has proper date format
+metadata2 <- metadata2 %>%
+  mutate(date = as.Date(paste(Sampling_year, Month, "01", sep = "-")))
+
+# Create ASV-family table
+asv_with_family2 <- data.frame(Family = taxonomy_data2$Family, asv_table2, check.names = FALSE, stringsAsFactors = FALSE)
+
+common_asvs2all <- intersect(rownames(counts_CSS_norm2), rownames(tax2))
+asv_tableall2 <- counts_CSS_norm2_2020_out2[common_asvs2all, ]
+tax_tableall2 <- tax2[common_asvs2all, ]
+
+# Rebuild full taxonomy
+taxonomy_dataall2 <- tax_tableall2 %>%
+  mutate(
+    Kingdom = Kingdom,
+    Phylum = paste("p_", Phylum),
+    Class = paste(Phylum, "c_", Class, sep = "_"),
+    Order = paste(Class, "o_", Order, sep = "_"),
+    Family = paste(Order, "f_", Family, sep = "_"),
+    Genus = paste(Family, "g_", Genus, sep = "_")
+  )
+
+allasv_with_family2 <- data.frame(Family = taxonomy_dataall2$Family, counts_CSS_norm2, check.names = FALSE, stringsAsFactors = FALSE)
+
+# Sum by family
+asv_with_family2[, -1] <- lapply(asv_with_family2[, -1], function(x) as.numeric(as.character(x)))
+family_table2 <- asv_with_family2 %>%
+  group_by(Family) %>%
+  summarise(across(everything(), sum, na.rm = TRUE)) %>%
+  as.data.frame(stringsAsFactors = FALSE)
+rownames(family_table2) <- family_table2$Family
+family_table2$Family <- NULL
+
+# Long format and merge with metadata
+bac_long <- family_table2 %>%
+  rownames_to_column("Family") %>%
+  pivot_longer(cols = -Family, names_to = "Sample", values_to = "Abundance")
+metadata2$Sample <- rownames(metadata2)
+bac_with_meta <- bac_long %>%
+  left_join(metadata2, by = c("Sample" = "Sample"))
+
+summary_family <- bac_with_meta %>%
+  group_by(date, Family) %>%
+  summarise(Abundance = mean(Abundance, na.rm = TRUE), .groups = "drop")
+
+# Top 20 families by abundance
+top_families <- summary_family %>%
+  group_by(Family) %>%
+  summarise(total_abundance = sum(Abundance, na.rm = TRUE)) %>%
+  arrange(desc(total_abundance)) %>%
+  slice_head(n = 20) %>%
+  pull(Family)
+
+summary_family_top10 <- summary_family %>%
+  filter(Family %in% top_families)
+
+# Absolute abundance plot
+ggplot(summary_family_top10, aes(x = date, y = Abundance, fill = Family)) +
+  geom_bar(stat = "identity") +
+  scale_x_date(date_labels = "%Y-%m", date_breaks = "1 month") +
+  labs(title = "Top 10 Bacterial Families Over Time", x = "Sampling Date", y = "Mean Abundance", fill = "Family") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Relative abundance
+summary_family_rel <- summary_family %>%
+  group_by(date) %>%
+  mutate(Relative_abundance = Abundance / sum(Abundance, na.rm = TRUE)) %>%
+  ungroup()
+
+# Top 10 relative
+top_families <- summary_family_rel %>%
+  group_by(Family) %>%
+  summarise(total_abundance = sum(Abundance, na.rm = TRUE)) %>%
+  arrange(desc(total_abundance)) %>%
+  slice_head(n = 10) %>%
+  pull(Family)
+
+summary_family_top10_rel <- summary_family_rel %>%
+  filter(Family %in% top_families)
+
+ggbars <- ggplot(summary_family_top10_rel, aes(x = date, y = Relative_abundance, fill = Family)) +
+  geom_bar(stat = "identity") +
+  scale_x_date(date_labels = "%Y-%m", date_breaks = "2 month") +
+  labs(title = "Top 10 Bacterial Families (Relative Abundance)", x = "Sampling Date", y = "Relative Abundance", fill = "Family") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave("allbecs relmean 10top.svg", ggbars, width = 8, height = 6, dpi = 300, device = "svg")
+
