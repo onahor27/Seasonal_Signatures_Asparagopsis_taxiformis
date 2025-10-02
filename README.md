@@ -4,10 +4,10 @@ This repository contains the analysis scripts for the seasonal metabolomic and b
 
 ## Structure
 
-- `scripts/` – RMarkdown scripts for microbiome, metabolomics, and bioactivity analysis
-- `Input data/` – Input datasets
-- `results/` – Output files (Statistics)
-- `figures/` – Final publication-ready plots
+- [`Scripts`](https://github.com/onahor27/Seasonal_Signatures_Asparagopsis_taxiformis/tree/main/Scripts) – RMarkdown scripts for microbiome, metabolomics, and bioactivity analysis
+- [`input data`](https://github.com/onahor27/Seasonal_Signatures_Asparagopsis_taxiformis/tree/main/input%20data) – Input datasets
+- [`results`](https://github.com/onahor27/Seasonal_Signatures_Asparagopsis_taxiformis/tree/main/results) – Output files (Statistics)
+- [`Figures`](https://github.com/onahor27/Seasonal_Signatures_Asparagopsis_taxiformis/tree/main/Figures) – Final publication-ready plots
 
 ## Requirements
 
