@@ -1,0 +1,47 @@
+"adonis2(formula = fp_r[, -c(1:4)] ~ fp_r$Value, permutations = 1000, method = ""euclidean"")",,,,,,,,,,Temp group,,ivan run again:
+         Df SumOfSqs      R2    F  Pr(>F)  ,,,,,,,,,,,,"> pairwise.adonis2(fp_r[,-c(1:4)]~Value, data = fp_r, p.adjust.m = ""FDR"", perm = 1000, method = ""euclidean"")"
+Model     2   2103.1 0.08523 1.91 0.01099 *,,,,,,,,,,,,'adonis' will be deprecated: use 'adonis2' instead
+Residual 41  22572.9 0.91477               ,,,,,,,,,,,,'adonis' will be deprecated: use 'adonis2' instead
+Total    43  24676.0 1.00000               ,,,,,,,,,,,,'adonis' will be deprecated: use 'adonis2' instead
+---,,,,,,,,,,,,$parent_call
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1,,,,,,,,,,,,"[1] ""fp_r[, -c(1:4)] ~ Value , strata = Null"""
+> fp_r$wt0,,,,,,,,,,,,
+ [1] 28 28 21 21 29 29 17 17 21 21 26 26 21 21 17 17 26 26 30 30 17 17 28 28 29 29 27 27 27 27 29 29 27 27 18 18,,,,,,,,,,,,$Warm_vs_Cold
+[37] 24 24 20 20 20 20 22 22,,,,,,,,,,,,Permutation: free
+"> adonis2(fp_r[,-c(1:4)] ~ fp_r$wt0, method = ""euclidean"", permutations = 1000) # numeric temp",,,,,,,,,,,,Number of permutations: 1000
+Permutation test for adonis under reduced model,,,,,,,,,,,,
+Permutation: free,,,,,,,,,,,,Terms added sequentially (first to last)
+Number of permutations: 1000,,,,,,,,,,,,
+,,,,,,,,,,,,          Df SumsOfSqs MeanSqs F.Model      R2   Pr(>F)    
+"adonis2(formula = fp_r[, -c(1:4)] ~ fp_r$wt0, permutations = 1000, method = ""euclidean"")",,,,,,,,,,,,Value      1    1399.6 1399.59  2.5748 0.06346 0.000999 ***
+         Df SumOfSqs      R2      F   Pr(>F)    ,,,,,,,,,,,,Residuals 38   20655.6  543.57         0.93654             
+Model     1   1553.8 0.06297 2.8224 0.000999 ***,,,,,,,,,,,,Total     39   22055.2                 1.00000             
+Residual 42  23122.2 0.93703                    ,,,,,,,,,,,,---
+Total    43  24676.0 1.00000                    ,,,,,,,,,,,,Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+---,,,,,,,,,,,,
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1,,,,,,,,,,,,$Warm_vs_Middle
+"> adonis2(fp_r[,-c(1:4)] ~ fp_r$typefraction, method = ""euclidean"", permutations = 1000) # fraction type",,,,,,,,,,,,Permutation: free
+Permutation test for adonis under reduced model,,,,,,,,,,,,Number of permutations: 1000
+Permutation: free,,,,,,,,,,,,
+Number of permutations: 1000,,,,,,,,,,,,Terms added sequentially (first to last)
+,,,,,,,,,,,,
+"adonis2(formula = fp_r[, -c(1:4)] ~ fp_r$typefraction, permutations = 1000, method = ""euclidean"")",,,,,,,,,,,,          Df SumsOfSqs MeanSqs F.Model      R2 Pr(>F)
+         Df SumOfSqs      R2      F   Pr(>F)    ,,,,,,,,,,,,Value      1     811.7  811.72  1.2172 0.04827 0.2358
+Model     1     1924 0.07797 3.5517 0.000999 ***,,,,,,,,,,,,Residuals 24   16005.2  666.88         0.95173       
+Residual 42    22752 0.92203                    ,,,,,,,,,,,,Total     25   16817.0                 1.00000       
+Total    43    24676 1.00000                    ,,,,,,,,,,,,
+,,,,,,,,,,,,$Cold_vs_Middle
+,,,,,,,,,,,,Permutation: free
+,,,,,,,,,,,,Number of permutations: 1000
+,,,,,,,,,,,,
+,,,,,,,,,,,,Terms added sequentially (first to last)
+,,,,,,,,,,,,
+,,,,,,,,,,,,          Df SumsOfSqs MeanSqs F.Model      R2  Pr(>F)  
+,,,,,,,,,,,,Value      1     702.2  702.25  1.6553 0.07644 0.08492 .
+,,,,,,,,,,,,Residuals 20    8484.8  424.24         0.92356          
+,,,,,,,,,,,,Total     21    9187.1                 1.00000          
+,,,,,,,,,,,,---
+,,,,,,,,,,,,Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+,,,,,,,,,,,,
+,,,,,,,,,,,,"attr(,""class"")"
+,,,,,,,,,,,,"[1] ""pwadstrata"" ""list"""

@@ -1,0 +1,59 @@
+by famly shikmona bat galim together,,,,,,,,,,,,,,,,,,,,,,,,,,
+"> adonis2(t(family_table2)~lineage*Site*as.factor(Temp), data=metadata2_2020_out, distance=""bray"")",,,,,,,,,,,,,,omly Shikmona,,,,,,,,,,,,only bat galim
+Permutation test for adonis under reduced model,,,,,,,,,,,,,,"> adonis2(t(family_table1)~lineage*Site*as.factor(Temp), data=metadata1_2020_out, distance=""bray"")",,,,,,,,,,,,"> adonis2(t(family_table3)~lineage*Site*as.factor(Temp), data=metadata3_2020_out, distance=""bray"")"
+Permutation: free,,,,,,,,,,,,,,Permutation test for adonis under reduced model,,,,,,,,,,,,Permutation test for adonis under reduced model
+Number of permutations: 999,,,,,,,,,,,,,,Permutation: free,,,,,,,,,,,,Permutation: free
+,,,,,,,,,,,,,,Number of permutations: 999,,,,,,,,,,,,Number of permutations: 999
+"adonis2(formula = t(family_table2) ~ lineage * Site * as.factor(Temp), data = metadata2_2020_out, distance = ""bray"")",,,,,,,,,,,,,,,,,,,,,,,,,,
+         Df SumOfSqs      R2      F Pr(>F)    ,,,,,,,,,,,,,,"adonis2(formula = t(family_table1) ~ lineage * Site * as.factor(Temp), data = metadata1_2020_out, distance = ""bray"")",,,,,,,,,,,,"adonis2(formula = t(family_table3) ~ lineage * Site * as.factor(Temp), data = metadata3_2020_out, distance = ""bray"")"
+Model    28   3.5016 0.76927 4.7628  0.001 ***,,,,,,,,,,,,,,         Df SumOfSqs      R2      F Pr(>F)    ,,,,,,,,,,,,         Df SumOfSqs      R2      F Pr(>F)    
+Residual 40   1.0503 0.23073                  ,,,,,,,,,,,,,,Model    12  1.67063 0.74232 6.4816  0.001 ***,,,,,,,,,,,,Model    15  1.68615 0.78189 3.1069  0.001 ***
+Total    68   4.5519 1.00000                  ,,,,,,,,,,,,,,Residual 27  0.57993 0.25768                  ,,,,,,,,,,,,Residual 13  0.47035 0.21811                  
+---,,,,,,,,,,,,,,Total    39  2.25056 1.00000                  ,,,,,,,,,,,,Total    28  2.15650 1.00000                  
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1,,,,,,,,,,,,,,---,,,,,,,,,,,,---
+"> adonis2(t(family_table2)~as.factor(Temp), data=metadata2_2020_out, distance=""bray"")",,,,,,,,,,,,,,Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1,,,,,,,,,,,,Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+Permutation test for adonis under reduced model,,,,,,,,,,,,,,"> adonis2(t(family_table1)~as.factor(Temp), data=metadata1_2020_out, distance=""bray"")",,,,,,,,,,,,"> adonis2(t(family_table3)~as.factor(Temp), data=metadata3_2020_out, distance=""bray"")"
+Permutation: free,,,,,,,,,,,,,,Permutation test for adonis under reduced model,,,,,,,,,,,,Permutation test for adonis under reduced model
+Number of permutations: 999,,,,,,,,,,,,,,Permutation: free,,,,,,,,,,,,Permutation: free
+,,,,,,,,,,,,,,Number of permutations: 999,,,,,,,,,,,,Number of permutations: 999
+"adonis2(formula = t(family_table2) ~ as.factor(Temp), data = metadata2_2020_out, distance = ""bray"")",,,,,,,,,,,,,,,,,,,,,,,,,,
+         Df SumOfSqs      R2      F Pr(>F)    ,,,,,,,,,,,,,,"adonis2(formula = t(family_table1) ~ as.factor(Temp), data = metadata1_2020_out, distance = ""bray"")",,,,,,,,,,,,"adonis2(formula = t(family_table3) ~ as.factor(Temp), data = metadata3_2020_out, distance = ""bray"")"
+Model    10   2.2414 0.49241 5.6265  0.001 ***,,,,,,,,,,,,,,         Df SumOfSqs      R2      F Pr(>F)    ,,,,,,,,,,,,         Df SumOfSqs      R2      F Pr(>F)    
+Residual 58   2.3105 0.50759                  ,,,,,,,,,,,,,,Model     8   1.3987 0.62147 6.3621  0.001 ***,,,,,,,,,,,,Model     9  1.31998 0.61209 3.3312  0.001 ***
+Total    68   4.5519 1.00000                  ,,,,,,,,,,,,,,Residual 31   0.8519 0.37853                  ,,,,,,,,,,,,Residual 19  0.83652 0.38791                  
+---,,,,,,,,,,,,,,Total    39   2.2506 1.00000                  ,,,,,,,,,,,,Total    28  2.15650 1.00000                  
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1,,,,,,,,,,,,,,---,,,,,,,,,,,,---
+"> pairwise.adonis2(t(family_table2)~Tempgroup, data=metadata2_2020_out, distance=""bray"")",,,,,,,,,,,,,,Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1,,,,,,,,,,,,Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+$parent_call,,,,,,,,,,,,,,"> pairwise.adonis2(t(family_table1)~Tempgroup, data=metadata1_2020_out, distance=""bray"")",,,,,,,,,,,,"> pairwise.adonis2(t(family_table3)~Tempgroup, data=metadata3_2020_out, distance=""bray"")"
+"[1] ""t(family_table2) ~ Tempgroup , strata = Null , permutations 999""",,,,,,,,,,,,,,$parent_call,,,,,,,,,,,,$parent_call
+,,,,,,,,,,,,,,"[1] ""t(family_table1) ~ Tempgroup , strata = Null , permutations 999""",,,,,,,,,,,,"[1] ""t(family_table3) ~ Tempgroup , strata = Null , permutations 999"""
+$cold_vs_warm,,,,,,,,,,,,,,,,,,,,,,,,,,
+         Df SumOfSqs      R2      F Pr(>F)    ,,,,,,,,,,,,,,$cold_vs_warm,,,,,,,,,,,,$warm_vs_mild
+Model     1   1.0072 0.30775 20.894  0.001 ***,,,,,,,,,,,,,,         Df SumOfSqs      R2      F Pr(>F)    ,,,,,,,,,,,,         Df SumOfSqs      R2      F Pr(>F)   
+Residual 47   2.2655 0.69225                  ,,,,,,,,,,,,,,Model     1  0.65274 0.38162 16.045  0.001 ***,,,,,,,,,,,,Model     1  0.36453 0.20628 5.7175  0.002 **
+Total    48   3.2727 1.00000                  ,,,,,,,,,,,,,,Residual 26  1.05772 0.61838                  ,,,,,,,,,,,,Residual 22  1.40267 0.79372                 
+---,,,,,,,,,,,,,,Total    27  1.71046 1.00000                  ,,,,,,,,,,,,Total    23  1.76721 1.00000                 
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1,,,,,,,,,,,,,,---,,,,,,,,,,,,---
+,,,,,,,,,,,,,,Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1,,,,,,,,,,,,Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+$cold_vs_mild,,,,,,,,,,,,,,,,,,,,,,,,,,
+         Df SumOfSqs      R2      F Pr(>F)    ,,,,,,,,,,,,,,$cold_vs_mild,,,,,,,,,,,,$warm_vs_cold
+Model     1  0.20514 0.11987 4.6305  0.001 ***,,,,,,,,,,,,,,         Df SumOfSqs      R2      F Pr(>F)    ,,,,,,,,,,,,         Df SumOfSqs      R2      F Pr(>F)    
+Residual 34  1.50631 0.88013                  ,,,,,,,,,,,,,,Model     1  0.20333 0.22722 6.1745  0.001 ***,,,,,,,,,,,,Model     1  0.34729 0.24605 6.2007  0.001 ***
+Total    35  1.71146 1.00000                  ,,,,,,,,,,,,,,Residual 21  0.69155 0.77278                  ,,,,,,,,,,,,Residual 19  1.06416 0.75395                  
+---,,,,,,,,,,,,,,Total    22  0.89489 1.00000                  ,,,,,,,,,,,,Total    20  1.41145 1.00000                  
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1,,,,,,,,,,,,,,---,,,,,,,,,,,,---
+,,,,,,,,,,,,,,Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1,,,,,,,,,,,,Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+$warm_vs_mild,,,,,,,,,,,,,,,,,,,,,,,,,,
+         Df SumOfSqs      R2      F Pr(>F)    ,,,,,,,,,,,,,,$warm_vs_mild,,,,,,,,,,,,$mild_vs_cold
+Model     1   0.6372 0.19046 11.999  0.001 ***,,,,,,,,,,,,,,         Df SumOfSqs      R2     F Pr(>F)    ,,,,,,,,,,,,         Df SumOfSqs      R2     F Pr(>F)
+Residual 51   2.7085 0.80954                  ,,,,,,,,,,,,,,Model     1  0.33959 0.23398 8.247  0.001 ***,,,,,,,,,,,,Model     1  0.07718 0.10321 1.266  0.252
+Total    52   3.3457 1.00000                  ,,,,,,,,,,,,,,Residual 27  1.11179 0.76602                 ,,,,,,,,,,,,Residual 11  0.67063 0.89679             
+---,,,,,,,,,,,,,,Total    28  1.45137 1.00000                 ,,,,,,,,,,,,Total    12  0.74781 1.00000             
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1,,,,,,,,,,,,,,---,,,,,,,,,,,,
+,,,,,,,,,,,,,,Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1,,,,,,,,,,,,"attr(,""class"")"
+"attr(,""class"")",,,,,,,,,,,,,,,,,,,,,,,,,,"[1] ""pwadstrata"" ""list"""
+"[1] ""pwadstrata"" ""list""      ",,,,,,,,,,,,,,"attr(,""class"")",,,,,,,,,,,,
+,,,,,,,,,,,,,,"[1] ""pwadstrata"" ""list""      ",,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,,,,
