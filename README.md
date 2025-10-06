@@ -11,7 +11,7 @@ This repository contains the analysis scripts for the seasonal metabolomic and b
 
 ## Requirements
 
-See `install_packages.R` for all necessary libraries.
+See [`install_packages.R`](https://github.com/onahor27/Seasonal_Signatures_Asparagopsis_taxiformis/blob/main/Scripts/install_packages.R) for all necessary libraries.
 
 ## License
 
